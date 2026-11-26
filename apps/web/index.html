@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>ATLAS // Chrome Voice Client</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Rajdhani:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- Full-Bleed HUD Frame Viewport -->
+    <div class="atlas-hud-frame">
+      <!-- Full-Screen Ambient Three.js Canvas -->
+      <canvas id="orbCanvas" class="hud-fullscreen-canvas"></canvas>
+
+      <!-- Sci-fi Corner Brackets and Outer Frame Bevels -->
+      <div class="hud-frame-border"></div>
+      <div class="hud-grid-background"></div>
+      <div class="hud-corner-bracket bracket-tl"></div>
+      <div class="hud-corner-bracket bracket-tr"></div>
+      <div class="hud-corner-bracket bracket-bl"></div>
+      <div class="hud-corner-bracket bracket-br"></div>
+      <div class="hud-corner-star">✦</div>
+
+      <!-- Top HUD Header -->
+      <header class="hud-header">
+        <div class="header-left">
+          <h1 class="logo-title">ATLAS</h1>
+          <span class="logo-subtitle">Chrome Test Client</span>
+        </div>
+
+        <div class="header-right">
+          <!-- Connection Status Pill -->
+          <div id="connectionBadge" class="hud-pill pill-connected" title="WebSocket Gateway Connection">
+            <span class="pill-icon wifi-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                <line x1="12" y1="20" x2="12.01" y2="20"/>
+              </svg>
+            </span>
+            <span id="connectionText">CONNECTED</span>
+          </div>
+
+          <!-- Language Voice Pill (EN: Ryan / TE: Mohan) -->
+          <div id="languagePill" class="hud-pill pill-lang" title="Active Spoken Language & Neural Voice">
+            <span class="pill-icon">🌐</span>
+            <span id="languageText">EN</span>
+          </div>
+
+          <!-- Wake Word Toggle Pill -->
+          <button id="wakeWordToggleBtn" class="hud-pill-btn pill-wakeword active" title="Toggle Background 'Hey Atlas' Wake Word Detection">
+            <span class="pill-icon">🎙️</span>
+            <span id="wakeWordText">WAKE WORD ON</span>
+          </button>
+
+          <!-- Reconnect Button -->
+          <button id="reconnectBtn" class="hud-pill-btn pill-reconnect" title="Reconnect WebSocket Gateway">
+            <span class="pill-icon">↻</span>
+            <span>Reconnect</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Stage Area -->
+      <main class="hud-main">
+        <!-- Hero Visualizer Stage Spacer -->
+        <section class="hud-visualizer-container">
+          <div id="assistantStatePill" class="state-pill">Ready</div>
+        </section>
+
+        <!-- Live Response Stream Card -->
+        <section class="hud-response-card">
+          <div class="card-edge-glow edge-left"></div>
+          <div class="card-edge-glow edge-right"></div>
+          <div class="response-card-header">
+            <span class="card-title">LIVE RESPONSE STREAM</span>
+            <span id="sessionIdLabel" class="session-label">Session: initializing...</span>
+          </div>
+          <div id="transcriptBody" class="response-card-body">
+            <div class="transcript-line atlas">
+              <span class="speaker-label">ATLAS:</span>
+              <span class="speaker-text">Yes Ranga, the systems are fully operational. Ready for your input.</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Quick Test Chips -->
+        <div class="hud-quick-pills">
+          <button class="hud-quick-btn" data-prompt="What database architecture and PRAGMA settings did we decide on for ATLAS?">
+            🔍 Test Recall (SQLite)
+          </button>
+          <button class="hud-quick-btn" data-prompt="క్వాంటం కంప్యూటింగ్ అంటే ఏమిటి? సులభంగా వివరించండి.">
+            🇮🇳 Telugu Mode (Mohan)
+          </button>
+          <button class="hud-quick-btn" data-prompt="Can you explain how Node.js buffer chunking works in 2 sentences?">
+            ⚡ Conciseness Check
+          </button>
+          <button class="hud-quick-btn" data-prompt="Switching topic completely: What is your favorite galaxy in the universe?">
+            🔄 Topic Pivot
+          </button>
+        </div>
+
+        <!-- Input Row -->
+        <form id="chatForm" class="hud-input-row">
+          <input
+            id="chatInput"
+            type="text"
+            class="hud-text-input"
+            placeholder="Send a prompt to ATLAS (or tap the mic below)..."
+            autocomplete="off"
+          />
+          <button id="sendBtn" type="submit" class="hud-send-btn">
+            Send
+          </button>
+        </form>
+
+        <!-- Bottom Controls Dock -->
+        <footer class="hud-dock">
+          <!-- Interrupt Button -->
+          <button id="interruptBtn" class="dock-btn btn-interrupt" disabled title="Immediately interrupt speech and generation">
+            <span class="btn-dot"></span>
+            <span>Interrupt</span>
+          </button>
+
+          <!-- Central Glowing Mic Button -->
+          <div class="mic-button-wrapper">
+            <div class="mic-glow-halo"></div>
+            <button id="micBtn" class="dock-mic-btn" title="Toggle Voice Stream (or push to send)">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- New Session Reset Button -->
+          <button id="resetBtn" class="dock-btn btn-reset" title="Start a fresh conversation session">
+            <span class="btn-check">☑</span>
+            <span>New Session</span>
+          </button>
+        </footer>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

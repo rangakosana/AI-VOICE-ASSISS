@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">ATLAS</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_listening">Listening…</string>
+    <string name="btn_start_listening">Start Listening</string>
+    <string name="btn_stop_listening">Stop Listening</string>
+    <string name="btn_interrupt">Barge-in / Interrupt</string>
+    <string name="permission_audio_rationale">ATLAS requires microphone access to enable real-time voice streaming and speech recognition.</string>
+</resources>
+

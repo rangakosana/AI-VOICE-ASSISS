@@ -1,0 +1,19 @@
+{
+  "name": "atlas-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo workspace for ATLAS personal AI voice assistant",
+  "workspaces": [
+    "apps/backend",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm --workspace=@atlas/backend run dev",
+    "web": "npm --workspace=@atlas/web run dev",
+    "build": "npm --workspace=@atlas/backend run build",
+    "start": "npm --workspace=@atlas/backend run start",
+    "test": "npm --workspace=@atlas/backend run test",
+    "typecheck": "npm --workspace=@atlas/backend run typecheck && npm --workspace=@atlas/web run typecheck"
+  }
+}
+
