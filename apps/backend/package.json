@@ -15,17 +15,17 @@
   "dependencies": {
     "@fastify/websocket": "^11.3.7",
     "@google/genai": "^3.2.0",
-    "better-sqlite3": "^13.1.1",
-    "dotenv": "^16.4.7",
-    "fastify": "^5.2.1",
-    "msedge-tts": "^2.1.1"
-  },
-  "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.13.1",
     "@types/ws": "^8.18.2",
-    "tsx": "^4.19.3",
+    "better-sqlite3": "^13.1.1",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "msedge-tts": "^2.1.1",
     "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3"
   },
   "engines": {
     "node": ">=20.0.0"
