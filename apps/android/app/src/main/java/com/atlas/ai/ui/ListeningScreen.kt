@@ -2,11 +2,13 @@ package com.atlas.ai.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -61,8 +63,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -80,6 +88,22 @@ import com.atlas.ai.ui.theme.SurfaceVariantDark
 import com.atlas.ai.ui.theme.TextPrimary
 import com.atlas.ai.ui.theme.TextSecondary
 import com.atlas.ai.ui.theme.TextTertiary
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.random.Random
+
+// ---------------------------------------------------------------------------
+// Starfield Background Particle Data
+// ---------------------------------------------------------------------------
+private data class CosmicStar(
+    val xRel: Float,
+    val yRel: Float,
+    val size: Float,
+    val baseAlpha: Float,
+    val speed: Float,
+    val colorIdx: Int
+)
 
 @Composable
 fun ListeningScreen(
@@ -115,75 +139,406 @@ fun ListeningScreen(
         )
     }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = BackgroundDark,
-        contentWindowInsets = WindowInsets.safeDrawing
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 20.dp, vertical = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // 1. Header: Branding, Host, Status & Language & Reconnect
-            HeaderSection(
-                connectionStatus = connectionStatus,
-                sessionId = sessionId,
-                currentLanguage = currentLanguage,
-                onOpenHostSettings = { showHostDialog = true },
-                onReconnect = onReconnect
-            )
+    // Full-screen living cosmic container
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(BackgroundDark)
+    ) {
+        // 1. Full-Screen Living Cosmic Starfield & HUD Cyber Grid Layer
+        CosmicStarfieldBackground(modifier = Modifier.fillMaxSize())
 
-            // 2. Background Wake-Word ("Hey Atlas") Activation Toggle
-            WakeWordBar(
-                isWakeWordRunning = isWakeWordRunning,
-                onToggleWakeWord = onToggleWakeWord
-            )
+        // 2. Main Holographic HUD UI Frame
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets.safeDrawing
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // 1. Header: Branding, Host, Status & Language & Reconnect
+                HeaderSection(
+                    connectionStatus = connectionStatus,
+                    sessionId = sessionId,
+                    currentLanguage = currentLanguage,
+                    onOpenHostSettings = { showHostDialog = true },
+                    onReconnect = onReconnect
+                )
 
-            // 3. Animated AI Orb Visualizer
-            OrbVisualizer(
-                assistantState = assistantState,
-                isRecording = isRecording,
-                audioRms = audioRms
-            )
+                // 2. Background Wake-Word ("Hey Atlas") Activation Toggle
+                WakeWordBar(
+                    isWakeWordRunning = isWakeWordRunning,
+                    onToggleWakeWord = onToggleWakeWord
+                )
 
-            // 4. Transcript Card & State Header
-            TranscriptSection(
-                assistantState = assistantState,
-                streamingText = streamingText
-            )
+                // 3. Audio-Reactive Holographic Arc Reactor & Particle Core
+                HolographicCoreVisualizer(
+                    assistantState = assistantState,
+                    isRecording = isRecording,
+                    audioRms = audioRms
+                )
 
-            // 5. Quick Prompt Pills
-            QuickPromptsRow(
-                onSelectPrompt = { prompt ->
-                    onSendMessage(prompt)
-                }
-            )
+                // 4. Glassmorphic Transcript Card & Telemetry State
+                TranscriptSection(
+                    assistantState = assistantState,
+                    streamingText = streamingText
+                )
 
-            // 6. Text / Chat Input Bar
-            ChatInputBar(
-                inputText = chatInputText,
-                onInputChanged = { chatInputText = it },
-                onSend = {
-                    if (chatInputText.isNotBlank()) {
-                        onSendMessage(chatInputText.trim())
-                        chatInputText = ""
+                // 5. Quick Prompt Pills
+                QuickPromptsRow(
+                    onSelectPrompt = { prompt ->
+                        onSendMessage(prompt)
                     }
-                },
-                isEnabled = connectionStatus == AtlasWebSocketClient.ConnectionStatus.CONNECTED
+                )
+
+                // 6. Text / Chat Input Bar
+                ChatInputBar(
+                    inputText = chatInputText,
+                    onInputChanged = { chatInputText = it },
+                    onSend = {
+                        if (chatInputText.isNotBlank()) {
+                            onSendMessage(chatInputText.trim())
+                            chatInputText = ""
+                        }
+                    },
+                    isEnabled = connectionStatus == AtlasWebSocketClient.ConnectionStatus.CONNECTED
+                )
+
+                // 7. Action Controls: Interrupt, Mic, New Session
+                ControlsSection(
+                    connectionStatus = connectionStatus,
+                    assistantState = assistantState,
+                    isRecording = isRecording,
+                    onToggleRecording = onToggleRecording,
+                    onInterrupt = onInterrupt,
+                    onNewSession = onNewSession
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 60fps Living Cosmic Starfield & Sci-Fi HUD Grid Background.
+ */
+@Composable
+private fun CosmicStarfieldBackground(modifier: Modifier = Modifier) {
+    val stars = remember {
+        val rand = Random(42)
+        List(140) {
+            CosmicStar(
+                xRel = rand.nextFloat(),
+                yRel = rand.nextFloat(),
+                size = rand.nextFloat() * 2.8f + 1.2f,
+                baseAlpha = rand.nextFloat() * 0.4f + 0.3f,
+                speed = rand.nextFloat() * 1.5f + 0.5f,
+                colorIdx = rand.nextInt(4)
+            )
+        }
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "starTwinkle")
+    val twinklePhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 9000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "twinklePhase"
+    )
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+
+        // 1. Subtle Radial Cosmic Bloom behind upper visualizer
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    AccentCyan.copy(alpha = 0.09f),
+                    Color(0xFF7C3AED).copy(alpha = 0.04f),
+                    Color.Transparent
+                ),
+                center = Offset(w * 0.5f, h * 0.35f),
+                radius = w * 0.75f
+            )
+        )
+
+        // 2. Subtle Sci-Fi Grid lines
+        val gridStep = 55.dp.toPx()
+        var curY = 0f
+        while (curY < h) {
+            drawLine(
+                color = AccentCyan.copy(alpha = 0.02f),
+                start = Offset(0f, curY),
+                end = Offset(w, curY),
+                strokeWidth = 1f
+            )
+            curY += gridStep
+        }
+        var curX = 0f
+        while (curX < w) {
+            drawLine(
+                color = AccentCyan.copy(alpha = 0.02f),
+                start = Offset(curX, 0f),
+                end = Offset(curX, h),
+                strokeWidth = 1f
+            )
+            curX += gridStep
+        }
+
+        // 3. Twinkling Stars
+        stars.forEach { star ->
+            val osc = sin(twinklePhase * star.speed + star.xRel * 10f)
+            val alpha = (star.baseAlpha + 0.3f * osc).coerceIn(0.15f, 0.95f)
+
+            val color = when (star.colorIdx) {
+                0 -> Color.White
+                1 -> AccentCyan
+                2 -> Color(0xFFC084FC) // Violet/Purple
+                else -> Color(0xFFFDE68A) // Soft Gold
+            }
+
+            drawCircle(
+                color = color.copy(alpha = alpha),
+                radius = star.size,
+                center = Offset(star.xRel * w, star.yRel * h)
+            )
+        }
+
+        // 4. Sci-Fi Corner Brackets
+        val bSize = 22.dp.toPx()
+        val bOffset = 14.dp.toPx()
+        val bracketColor = AccentCyan.copy(alpha = 0.45f)
+        val bStroke = 1.8f
+
+        // Top-Left L
+        drawLine(bracketColor, Offset(bOffset, bOffset), Offset(bOffset + bSize, bOffset), bStroke)
+        drawLine(bracketColor, Offset(bOffset, bOffset), Offset(bOffset, bOffset + bSize), bStroke)
+
+        // Top-Right L
+        drawLine(bracketColor, Offset(w - bOffset, bOffset), Offset(w - bOffset - bSize, bOffset), bStroke)
+        drawLine(bracketColor, Offset(w - bOffset, bOffset), Offset(w - bOffset, bOffset + bSize), bStroke)
+
+        // Bottom-Left L
+        drawLine(bracketColor, Offset(bOffset, h - bOffset), Offset(bOffset + bSize, h - bOffset), bStroke)
+        drawLine(bracketColor, Offset(bOffset, h - bOffset), Offset(bOffset, h - bOffset - bSize), bStroke)
+
+        // Bottom-Right L
+        drawLine(bracketColor, Offset(w - bOffset, h - bOffset), Offset(w - bOffset - bSize, h - bOffset), bStroke)
+        drawLine(bracketColor, Offset(w - bOffset, h - bOffset), Offset(w - bOffset, h - bOffset - bSize), bStroke)
+    }
+}
+
+/**
+ * Multi-Ring Audio-Reactive Holographic Arc Reactor & Plasma Core.
+ */
+@Composable
+private fun HolographicCoreVisualizer(
+    assistantState: AtlasWebSocketClient.AssistantState,
+    isRecording: Boolean,
+    audioRms: Float
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "coreChoreography")
+
+    // Slow organic breathing
+    val breathScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathScale"
+    )
+
+    // Outer ring clockwise rotation
+    val rotationOuter by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = if (assistantState == AtlasWebSocketClient.AssistantState.THINKING) 3000 else 14000,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotationOuter"
+    )
+
+    // Inner ring counter-clockwise rotation
+    val rotationInner by infiniteTransition.animateFloat(
+        initialValue = 360f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = if (assistantState == AtlasWebSocketClient.AssistantState.THINKING) 2400 else 10000,
+                easing = LinearEasing
+            ),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotationInner"
+    )
+
+    val dynamicAudioScale = (1.0f + audioRms * 1.6f).coerceIn(1.0f, 1.85f)
+    val effectiveScale = if (isRecording || assistantState == AtlasWebSocketClient.AssistantState.SPEAKING)
+        dynamicAudioScale
+    else
+        breathScale
+
+    // Theme color shifting based on state
+    val corePrimaryColor by animateColorAsState(
+        targetValue = when {
+            assistantState == AtlasWebSocketClient.AssistantState.SPEAKING -> Color(0xFF00B0FF)
+            assistantState == AtlasWebSocketClient.AssistantState.THINKING -> AccentOrange
+            isRecording -> AccentGreen
+            else -> AccentCyan
+        },
+        label = "corePrimaryColor"
+    )
+
+    val coreSecondaryColor by animateColorAsState(
+        targetValue = when {
+            assistantState == AtlasWebSocketClient.AssistantState.SPEAKING -> Color(0xFFA855F7) // Violet
+            assistantState == AtlasWebSocketClient.AssistantState.THINKING -> Color(0xFFF59E0B) // Gold
+            isRecording -> AccentCyan
+            else -> Color(0xFF38BDF8) // Sky blue
+        },
+        label = "coreSecondaryColor"
+    )
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(220.dp)
+            .scale(effectiveScale)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val maxR = size.width / 2f
+
+            // 1. Outer Radial Aura Bloom
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        corePrimaryColor.copy(alpha = 0.4f),
+                        coreSecondaryColor.copy(alpha = 0.12f),
+                        Color.Transparent
+                    ),
+                    center = center,
+                    radius = maxR * 0.95f
+                ),
+                radius = maxR * 0.95f,
+                center = center
             )
 
-            // 7. Action Controls: Interrupt, Mic, New Session
-            ControlsSection(
-                connectionStatus = connectionStatus,
-                assistantState = assistantState,
-                isRecording = isRecording,
-                onToggleRecording = onToggleRecording,
-                onInterrupt = onInterrupt,
-                onNewSession = onNewSession
+            // 2. Segmented Outer Arc Reactor Ring (Clockwise)
+            rotate(rotationOuter, pivot = center) {
+                val outerR = maxR * 0.82f
+                // Draw 3 primary telemetry arcs
+                val arcSweep = 75f
+                for (i in 0 until 3) {
+                    val startAngle = i * 120f
+                    drawArc(
+                        color = corePrimaryColor.copy(alpha = 0.75f),
+                        startAngle = startAngle,
+                        sweepAngle = arcSweep,
+                        useCenter = false,
+                        topLeft = Offset(center.x - outerR, center.y - outerR),
+                        size = Size(outerR * 2, outerR * 2),
+                        style = Stroke(width = 2.5f, cap = StrokeCap.Round)
+                    )
+                }
+
+                // 24 Degree Tick Marks
+                val tickR1 = outerR - 4f
+                val tickR2 = outerR + 4f
+                for (i in 0 until 24) {
+                    val rad = (i * 15f) * (PI / 180f).toFloat()
+                    val p1 = Offset(center.x + cos(rad) * tickR1, center.y + sin(rad) * tickR1)
+                    val p2 = Offset(center.x + cos(rad) * tickR2, center.y + sin(rad) * tickR2)
+                    drawLine(
+                        color = coreSecondaryColor.copy(alpha = 0.5f),
+                        start = p1,
+                        end = p2,
+                        strokeWidth = 1.2f
+                    )
+                }
+            }
+
+            // 3. Segmented Middle Telemetry Ring (Counter-Clockwise)
+            rotate(rotationInner, pivot = center) {
+                val midR = maxR * 0.62f
+                val arcSweep = 50f
+                for (i in 0 until 4) {
+                    val startAngle = i * 90f + 15f
+                    drawArc(
+                        color = coreSecondaryColor.copy(alpha = 0.65f),
+                        startAngle = startAngle,
+                        sweepAngle = arcSweep,
+                        useCenter = false,
+                        topLeft = Offset(center.x - midR, center.y - midR),
+                        size = Size(midR * 2, midR * 2),
+                        style = Stroke(width = 2f, cap = StrokeCap.Round)
+                    )
+                }
+
+                // Orbiting satellite dots
+                for (i in 0 until 6) {
+                    val rad = (i * 60f) * (PI / 180f).toFloat()
+                    val dotPos = Offset(center.x + cos(rad) * midR, center.y + sin(rad) * midR)
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.9f),
+                        radius = 2.4f,
+                        center = dotPos
+                    )
+                }
+            }
+
+            // 4. Audio-Reactive Plasma Ring (Expands & Ripples on Voice RMS)
+            val audioWaveR = maxR * 0.44f + (audioRms * 22f)
+            val wavePath = Path()
+            val points = 32
+            for (i in 0 until points) {
+                val angle = (i.toFloat() / points) * (2 * PI).toFloat()
+                val waveDistort = if (isRecording || audioRms > 0.05f) {
+                    sin(angle * 6f + rotationOuter * 0.1f) * (audioRms * 8f)
+                } else 0f
+                val r = audioWaveR + waveDistort
+                val px = center.x + cos(angle) * r
+                val py = center.y + sin(angle) * r
+                if (i == 0) wavePath.moveTo(px, py) else wavePath.lineTo(px, py)
+            }
+            wavePath.close()
+
+            drawPath(
+                path = wavePath,
+                color = corePrimaryColor.copy(alpha = 0.85f),
+                style = Stroke(width = 2.2f)
+            )
+
+            // 5. White-Hot Glowing Central Nucleus
+            val nucleusR = maxR * 0.28f
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.White,
+                        corePrimaryColor,
+                        coreSecondaryColor.copy(alpha = 0.6f),
+                        Color.Transparent
+                    ),
+                    center = center,
+                    radius = nucleusR
+                ),
+                radius = nucleusR,
+                center = center
             )
         }
     }
@@ -200,14 +555,14 @@ private fun WakeWordBar(
             .clip(RoundedCornerShape(12.dp))
             .clickable { onToggleWakeWord(!isWakeWordRunning) },
         colors = CardDefaults.cardColors(
-            containerColor = if (isWakeWordRunning) AccentCyan.copy(alpha = 0.12f) else SurfaceVariantDark.copy(alpha = 0.5f)
+            containerColor = if (isWakeWordRunning) AccentCyan.copy(alpha = 0.14f) else Color(0x99151B26)
         ),
         border = CardDefaults.outlinedCardBorder().copy(
             brush = Brush.horizontalGradient(
                 if (isWakeWordRunning)
-                    listOf(AccentCyan.copy(alpha = 0.5f), AccentCyan.copy(alpha = 0.15f))
+                    listOf(AccentCyan.copy(alpha = 0.6f), AccentCyan.copy(alpha = 0.2f))
                 else
-                    listOf(SurfaceVariantDark, SurfaceVariantDark)
+                    listOf(SurfaceVariantDark.copy(alpha = 0.8f), SurfaceVariantDark.copy(alpha = 0.3f))
             )
         )
     ) {
@@ -356,82 +711,6 @@ private fun HeaderSection(
 }
 
 @Composable
-private fun OrbVisualizer(
-    assistantState: AtlasWebSocketClient.AssistantState,
-    isRecording: Boolean,
-    audioRms: Float
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "orbPulse")
-
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-
-    val dynamicAudioScale = (1.0f + audioRms * 1.5f).coerceIn(1.0f, 1.8f)
-    val effectiveScale = if (isRecording) dynamicAudioScale else pulseScale
-
-    val orbColor by animateColorAsState(
-        targetValue = when {
-            assistantState == AtlasWebSocketClient.AssistantState.SPEAKING -> AccentNeonBlue
-            assistantState == AtlasWebSocketClient.AssistantState.THINKING -> AccentOrange
-            isRecording -> AccentGreen
-            else -> AccentCyan
-        },
-        label = "orbColor"
-    )
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.size(190.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(160.dp)
-                .scale(effectiveScale)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            orbColor.copy(alpha = 0.35f),
-                            orbColor.copy(alpha = 0.05f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
-        Box(
-            modifier = Modifier
-                .size(105.dp)
-                .scale(if (isRecording) dynamicAudioScale else 1.0f)
-                .clip(CircleShape)
-                .border(2.dp, orbColor.copy(alpha = 0.6f), CircleShape)
-        )
-
-        Box(
-            modifier = Modifier
-                .size(65.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color.White,
-                            orbColor,
-                            orbColor.copy(alpha = 0.7f)
-                        )
-                    )
-                )
-        )
-    }
-}
-
-@Composable
 private fun TranscriptSection(
     assistantState: AtlasWebSocketClient.AssistantState,
     streamingText: String
@@ -446,12 +725,12 @@ private fun TranscriptSection(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(150.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+            .height(145.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xCC0E1524)),
         shape = RoundedCornerShape(16.dp),
         border = CardDefaults.outlinedCardBorder().copy(
-            brush = Brush.linearGradient(
-                listOf(AccentCyan.copy(alpha = 0.3f), Color.Transparent)
+            brush = Brush.horizontalGradient(
+                listOf(AccentCyan.copy(alpha = 0.45f), AccentCyan.copy(alpha = 0.1f), Color.Transparent)
             )
         )
     ) {
@@ -460,12 +739,25 @@ private fun TranscriptSection(
                 .fillMaxSize()
                 .padding(14.dp)
         ) {
-            Text(
-                text = stateLabel,
-                color = AccentCyan,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stateLabel,
+                    color = AccentCyan,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "LIVE RESPONSE STREAM",
+                    color = TextTertiary,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
+                )
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -476,7 +768,7 @@ private fun TranscriptSection(
                     .verticalScroll(scrollState)
             ) {
                 Text(
-                    text = if (streamingText.isNotBlank()) streamingText else "Tap the mic or type below to talk with ATLAS...",
+                    text = if (streamingText.isNotBlank()) streamingText else "Tap the mic or say 'Hey Atlas' to talk...",
                     color = if (streamingText.isNotBlank()) TextPrimary else TextSecondary,
                     fontSize = 14.sp,
                     lineHeight = 20.sp
@@ -498,7 +790,7 @@ private fun QuickPromptsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         PromptPill(
-            text = "🔍 SQLite WAL Recall",
+            text = "🔍 SQLite Recall",
             onClick = { onSelectPrompt("What database architecture and PRAGMA settings did we decide on for ATLAS?") }
         )
         PromptPill(
@@ -520,7 +812,7 @@ private fun PromptPill(
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(SurfaceVariantDark)
+            .background(Color(0x991E2638))
             .border(1.dp, SurfaceVariantDark.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp)
@@ -556,8 +848,8 @@ private fun ChatInputBar(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = AccentCyan,
                 unfocusedBorderColor = SurfaceVariantDark,
-                focusedContainerColor = SurfaceDark,
-                unfocusedContainerColor = SurfaceDark,
+                focusedContainerColor = Color(0xCC0E1524),
+                unfocusedContainerColor = Color(0xCC0E1524),
                 focusedTextColor = TextPrimary,
                 unfocusedTextColor = TextPrimary
             ),
@@ -627,7 +919,7 @@ private fun ControlsSection(
             Text("Stop", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
 
-        // 2. Primary Mic Toggle Button
+        // 2. Primary Mic Toggle Button (with Glowing HUD ring)
         Button(
             onClick = onToggleRecording,
             enabled = isConnected,
@@ -637,7 +929,9 @@ private fun ControlsSection(
                 contentColor = BackgroundDark,
                 disabledContainerColor = SurfaceVariantDark
             ),
-            modifier = Modifier.size(64.dp)
+            modifier = Modifier
+                .size(64.dp)
+                .border(2.dp, if (isRecording) AccentRed.copy(alpha = 0.5f) else AccentCyan.copy(alpha = 0.5f), CircleShape)
         ) {
             Icon(
                 imageVector = if (isRecording) Icons.Default.MicOff else Icons.Default.Mic,
@@ -651,7 +945,7 @@ private fun ControlsSection(
             onClick = onNewSession,
             enabled = isConnected,
             colors = ButtonDefaults.buttonColors(
-                containerColor = SurfaceVariantDark,
+                containerColor = Color(0x991E2638),
                 contentColor = TextSecondary,
                 disabledContainerColor = SurfaceVariantDark.copy(alpha = 0.3f),
                 disabledContentColor = TextTertiary
