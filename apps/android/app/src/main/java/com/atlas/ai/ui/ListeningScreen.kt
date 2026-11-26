@@ -690,11 +690,19 @@ private fun HostSettingsDialog(
                 )
 
                 Button(
-                    onClick = { onSave(AtlasWebSocketClient.DEFAULT_PHYSICAL_DEVICE_URL) },
+                    onClick = { onSave(AtlasWebSocketClient.DEFAULT_CLOUD_URL) },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentCyan.copy(alpha = 0.25f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Wi-Fi LAN (192.168.137.57:3000)", fontSize = 12.sp, color = AccentCyan, fontWeight = FontWeight.Bold)
+                    Text("Render Cloud (ai-voice-assiss.onrender.com)", fontSize = 12.sp, color = AccentCyan, fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = { onSave(AtlasWebSocketClient.DEFAULT_PHYSICAL_DEVICE_URL) },
+                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceVariantDark),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Wi-Fi LAN (192.168.137.57:3000)", fontSize = 12.sp, color = TextPrimary)
                 }
 
                 Button(

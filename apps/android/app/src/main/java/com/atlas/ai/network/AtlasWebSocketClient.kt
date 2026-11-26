@@ -36,10 +36,11 @@ class AtlasWebSocketClient(
 ) {
     companion object {
         private const val TAG = "AtlasWebSocketClient"
+        const val DEFAULT_CLOUD_URL = "wss://ai-voice-assiss.onrender.com/v1/realtime"
         const val DEFAULT_EMULATOR_URL = "ws://10.0.2.2:3000/v1/realtime"
         const val DEFAULT_LOCALHOST_URL = "ws://127.0.0.1:3000/v1/realtime"
         const val DEFAULT_PHYSICAL_DEVICE_URL = "ws://192.168.137.57:3000/v1/realtime"
-        const val SERVER_URL = DEFAULT_PHYSICAL_DEVICE_URL
+        const val SERVER_URL = DEFAULT_CLOUD_URL
 
         private const val INITIAL_BACKOFF_MS = 1000L
         private const val MAX_BACKOFF_MS = 16000L
@@ -97,7 +98,7 @@ class AtlasWebSocketClient(
 
     // Internal WebSocket references
     private var webSocket: WebSocket? = null
-    private var serverUrl: String = DEFAULT_PHYSICAL_DEVICE_URL
+    private var serverUrl: String = DEFAULT_CLOUD_URL
     private val isExplicitDisconnect = AtomicBoolean(false)
     private var reconnectJob: Job? = null
     private var currentBackoffMs = INITIAL_BACKOFF_MS
@@ -105,7 +106,7 @@ class AtlasWebSocketClient(
     /**
      * Connect to the ATLAS Real-time Gateway WebSocket endpoint.
      */
-    fun connect(url: String = DEFAULT_PHYSICAL_DEVICE_URL) {
+    fun connect(url: String = DEFAULT_CLOUD_URL) {
         serverUrl = url
         isExplicitDisconnect.set(false)
         reconnectJob?.cancel()

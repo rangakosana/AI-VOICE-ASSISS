@@ -13,6 +13,9 @@ import type { AssistantState, ConnectionStatus, LogEntry } from './types.js';
 const connectionBadge = document.getElementById('connectionBadge') as HTMLElement;
 const connectionText = document.getElementById('connectionText') as HTMLElement;
 const languageText = document.getElementById('languageText') as HTMLElement;
+const endpointToggleBtn = document.getElementById('endpointToggleBtn') as HTMLButtonElement;
+const endpointText = document.getElementById('endpointText') as HTMLElement;
+const endpointIcon = document.getElementById('endpointIcon') as HTMLElement;
 const wakeWordToggleBtn = document.getElementById('wakeWordToggleBtn') as HTMLButtonElement;
 const wakeWordText = document.getElementById('wakeWordText') as HTMLElement;
 const reconnectBtn = document.getElementById('reconnectBtn') as HTMLButtonElement;
@@ -347,7 +350,39 @@ function stopVoiceTurn(explicitFinalText?: string, isManualOrCap = false) {
 // ---------------------------------------------------------------------------
 // Control Event Listeners
 // ---------------------------------------------------------------------------
-client.connect();
+// ---------------------------------------------------------------------------
+// Gateway Target: Cloud (Render) vs Localhost
+// ---------------------------------------------------------------------------
+const RENDER_CLOUD_WS_URL = 'wss://ai-voice-assiss.onrender.com/v1/realtime';
+const LOCAL_WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/v1/realtime`;
+
+let currentGatewayTarget = localStorage.getItem('atlas_gateway_target') || 'CLOUD';
+
+function updateEndpointUI(target: string): void {
+  if (endpointText) endpointText.textContent = target;
+  if (endpointIcon) endpointIcon.textContent = target === 'CLOUD' ? '☁️' : '💻';
+  if (endpointToggleBtn) {
+    endpointToggleBtn.classList.toggle('cloud', target === 'CLOUD');
+    endpointToggleBtn.title = `Current Gateway: ${target === 'CLOUD' ? 'Render Cloud (ai-voice-assiss.onrender.com)' : 'Local Mac Dev'}. Tap to switch.`;
+  }
+}
+
+function getGatewayUrl(): string {
+  return currentGatewayTarget === 'CLOUD' ? RENDER_CLOUD_WS_URL : LOCAL_WS_URL;
+}
+
+updateEndpointUI(currentGatewayTarget);
+client.connect(getGatewayUrl());
+
+endpointToggleBtn?.addEventListener('click', () => {
+  currentGatewayTarget = currentGatewayTarget === 'CLOUD' ? 'LOCAL' : 'CLOUD';
+  localStorage.setItem('atlas_gateway_target', currentGatewayTarget);
+  updateEndpointUI(currentGatewayTarget);
+  sfx.playConnectChime();
+  tts.stop();
+  stopVoiceTurn();
+  client.connect(getGatewayUrl());
+});
 
 // Unlock Web Audio API on gesture
 window.addEventListener('click', () => tts.resumeAudioContext(), { once: true });
@@ -355,7 +390,7 @@ window.addEventListener('keydown', () => tts.resumeAudioContext(), { once: true 
 
 reconnectBtn?.addEventListener('click', () => {
   tts.resumeAudioContext();
-  client.connect();
+  client.connect(getGatewayUrl());
 });
 
 chatForm?.addEventListener('submit', (e) => {
