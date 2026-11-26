@@ -28,6 +28,20 @@ const healthSchema = {
 };
 
 export const healthRoutes: FastifyPluginAsync = async (fastify) => {
+  // Root status endpoint for browser and cloud container probes
+  fastify.get('/', async (_request, reply) => {
+    return reply.status(200).send({
+      name: 'ATLAS AI Voice Assistant Gateway',
+      status: 'online',
+      version: '0.1.0',
+      environment: config.nodeEnv,
+      endpoints: {
+        health: '/health',
+        realtime: '/v1/realtime (WebSocket)',
+      },
+    });
+  });
+
   fastify.get('/health', { schema: healthSchema }, async (_request, reply) => {
     const response: HealthResponse = {
       status: 'ok',
@@ -40,4 +54,3 @@ export const healthRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(200).send(response);
   });
 };
-
