@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * On-device continuous speech-based Wake Word Detector for "Hey Atlas" and "OK Atlas".
  *
- * Uses Android's native SpeechRecognizer with offline preference and continuous re-arming
- * so it listens reliably in the background without heavy external library dependencies.
+ * Uses Android's native SpeechRecognizer with continuous re-arming so it listens reliably
+ * in the background and over lock-screen without heavy external library dependencies.
  */
 class SpeechWakeWordDetector(
     private val context: Context,
@@ -82,8 +82,8 @@ class SpeechWakeWordDetector(
                 }
 
                 override fun onError(error: Int) {
-                    // Recover from timeout or no-match and keep listening
-                    Log.d(TAG, "SpeechRecognizer error: $error, re-arming...")
+                    // Recover from timeout or no-match and keep listening in background
+                    Log.d(TAG, "Wake-word recognizer state: $error, re-arming...")
                     restartListening(delayMs = 300)
                 }
 
@@ -105,8 +105,6 @@ class SpeechWakeWordDetector(
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-            // Request offline on-device recognition if available
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
 
         try {

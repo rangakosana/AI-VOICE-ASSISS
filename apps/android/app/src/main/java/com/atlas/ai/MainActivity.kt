@@ -15,11 +15,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.atlas.ai.audio.AudioRecorder
+import com.atlas.ai.audio.AndroidSpeechRecognizer
 import com.atlas.ai.audio.NeuralAudioPlayer
 import com.atlas.ai.network.AtlasWebSocketClient
 import com.atlas.ai.service.AtlasWakeWordService
@@ -30,9 +31,13 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private lateinit var webSocketClient: AtlasWebSocketClient
-    private lateinit var audioRecorder: AudioRecorder
+    private lateinit var speechRecognizer: AndroidSpeechRecognizer
     private lateinit var audioPlayer: NeuralAudioPlayer
+
     private var currentServerUrl by mutableStateOf(AtlasWebSocketClient.SERVER_URL)
+    private var isRecording by mutableStateOf(false)
+    private var liveAudioRms by mutableFloatStateOf(0f)
+    private var liveStreamingText by mutableStateOf("")
     private var wasWakeWordActive = false
 
     private val sharedPrefs by lazy {
@@ -62,54 +67,62 @@ class MainActivity : ComponentActivity() {
         // 1. Configure Lock-Screen, Turn-Screen-On, and Keyguard Dismissal
         configureLockScreenDisplay()
 
-        // 2. Load persisted server URL or fallback to physical LAN default
+        // 2. Load persisted server URL or fallback to Cloud default
         val savedUrl = sharedPrefs.getString("server_url", AtlasWebSocketClient.SERVER_URL)
             ?: AtlasWebSocketClient.SERVER_URL
         currentServerUrl = savedUrl
 
-        // 3. Initialize network, recorder, and neural audio player engines
+        // 3. Initialize WebSocket client and Neural Audio player
         webSocketClient = AtlasWebSocketClient(lifecycleScope)
-        audioRecorder = AudioRecorder(this, lifecycleScope)
         audioPlayer = NeuralAudioPlayer(this, lifecycleScope) { isPlaying ->
-            audioRecorder.setAssistantSpeaking(isPlaying)
-
             if (!isPlaying && webSocketClient.assistantState.value == AtlasWebSocketClient.AssistantState.SPEAKING) {
                 webSocketClient.setAssistantState(AtlasWebSocketClient.AssistantState.IDLE)
                 // Resume wake word if it was paused during interaction
-                if (wasWakeWordActive && !audioRecorder.isRecording.value) {
+                if (wasWakeWordActive && !isRecording) {
                     wasWakeWordActive = false
                     AtlasWakeWordService.start(this)
                 }
             }
         }
 
-        // 4. Wire AudioRecorder turn timing and barge-in callbacks
-        audioRecorder.onSilenceTimeout = {
-            runOnUiThread {
-                if (audioRecorder.isRecording.value) {
-                    stopVoiceCapture()
+        // 4. Initialize Native Android Speech Recognizer (STT Engine)
+        speechRecognizer = AndroidSpeechRecognizer(
+            context = this,
+            onPartialText = { partial ->
+                runOnUiThread {
+                    liveStreamingText = "YOU: $partial"
+                }
+            },
+            onFinalText = { final ->
+                runOnUiThread {
+                    isRecording = false
+                    liveAudioRms = 0f
+                    liveStreamingText = "YOU: $final\n\nATLAS: (Thinking...)"
+                    webSocketClient.sendVoiceCommit(final)
+                }
+            },
+            onRmsChanged = { rms ->
+                runOnUiThread {
+                    liveAudioRms = rms
+                }
+            },
+            onError = { errMsg ->
+                runOnUiThread {
+                    isRecording = false
+                    liveAudioRms = 0f
+                    if (liveStreamingText.startsWith("YOU:")) {
+                        liveStreamingText = errMsg
+                    }
+                    if (webSocketClient.assistantState.value == AtlasWebSocketClient.AssistantState.LISTENING) {
+                        webSocketClient.setAssistantState(AtlasWebSocketClient.AssistantState.IDLE)
+                    }
+                    if (wasWakeWordActive && !isRecording) {
+                        wasWakeWordActive = false
+                        AtlasWakeWordService.start(this)
+                    }
                 }
             }
-        }
-
-        audioRecorder.onMaxUtteranceTimeout = {
-            runOnUiThread {
-                if (audioRecorder.isRecording.value) {
-                    stopVoiceCapture()
-                }
-            }
-        }
-
-        audioRecorder.onBargeIn = {
-            runOnUiThread {
-                audioPlayer.stop()
-                webSocketClient.sendInterrupt(reason = "user_barge_in")
-                if (audioRecorder.isRecording.value) {
-                    stopVoiceCapture()
-                    startVoiceCapture()
-                }
-            }
-        }
+        )
 
         // 5. Collect neural audio chunks (MP3 base64) streamed from backend
         lifecycleScope.launch {
@@ -132,32 +145,39 @@ class MainActivity : ComponentActivity() {
             AtlasTheme {
                 val connectionStatus by webSocketClient.connectionStatus.collectAsState()
                 val assistantState by webSocketClient.assistantState.collectAsState()
-                val isRecording by audioRecorder.isRecording.collectAsState()
-                val audioRms by audioRecorder.audioLevelRms.collectAsState()
-                val streamingText by webSocketClient.currentStreamingText.collectAsState()
+                val serverStreamingText by webSocketClient.currentStreamingText.collectAsState()
                 val sessionId by webSocketClient.currentSessionId.collectAsState()
                 val currentLanguage by webSocketClient.currentLanguage.collectAsState()
                 val isWakeWordRunning by AtlasWakeWordService.isServiceRunning.collectAsState()
+
+                // Display server streaming text when assistant is speaking, otherwise show live user mic text
+                val displayedText = if (assistantState == AtlasWebSocketClient.AssistantState.SPEAKING ||
+                                       assistantState == AtlasWebSocketClient.AssistantState.THINKING) {
+                    if (serverStreamingText.isNotBlank()) "ATLAS: $serverStreamingText" else liveStreamingText
+                } else {
+                    if (liveStreamingText.isNotBlank()) liveStreamingText else serverStreamingText
+                }
 
                 ListeningScreen(
                     connectionStatus = connectionStatus,
                     assistantState = assistantState,
                     isRecording = isRecording,
-                    audioRms = audioRms,
-                    streamingText = streamingText,
+                    audioRms = liveAudioRms,
+                    streamingText = displayedText,
                     sessionId = sessionId,
                     serverUrl = currentServerUrl,
                     currentLanguage = currentLanguage,
                     isWakeWordRunning = isWakeWordRunning,
                     onSendMessage = { text ->
                         audioPlayer.stop()
+                        liveStreamingText = "YOU: $text"
                         webSocketClient.sendMessage(text)
                     },
                     onToggleRecording = {
                         if (isRecording) {
                             stopVoiceCapture()
                         } else {
-                            if (audioRecorder.hasPermission()) {
+                            if (hasAllPermissions()) {
                                 startVoiceCapture()
                             } else {
                                 requestRequiredPermissions()
@@ -167,10 +187,17 @@ class MainActivity : ComponentActivity() {
                     onInterrupt = {
                         // Instant barge-in: stop both audio playback and active backend generation
                         audioPlayer.stop()
+                        speechRecognizer.cancel()
+                        isRecording = false
+                        liveAudioRms = 0f
                         webSocketClient.sendInterrupt(reason = "user_barge_in")
                     },
                     onNewSession = {
                         audioPlayer.stop()
+                        speechRecognizer.cancel()
+                        isRecording = false
+                        liveAudioRms = 0f
+                        liveStreamingText = ""
                         webSocketClient.endSession(reason = "user_reset")
                         webSocketClient.startSession()
                     },
@@ -206,7 +233,7 @@ class MainActivity : ComponentActivity() {
             val keyword = intent.getStringExtra("EXTRA_WAKE_KEYWORD") ?: "Hey Atlas"
             Toast.makeText(this, "$keyword activated! Listening...", Toast.LENGTH_SHORT).show()
             audioPlayer.stop()
-            if (audioRecorder.hasPermission()) {
+            if (hasAllPermissions()) {
                 startVoiceCapture()
             }
         }
@@ -277,31 +304,28 @@ class MainActivity : ComponentActivity() {
         // Barge-in: Stop any currently speaking audio immediately
         audioPlayer.stop()
 
-        // Temporarily pause wake-word service to prevent mic access conflicts
+        // Temporarily pause wake-word service so mic is 100% free
         if (AtlasWakeWordService.isServiceRunning.value) {
             wasWakeWordActive = true
             AtlasWakeWordService.stop(this)
         }
 
-        val started = audioRecorder.startRecording { chunk ->
-            // Stream raw 16kHz PCM audio chunk directly over WebSocket
-            webSocketClient.sendAudioChunk(chunk)
-        }
-        if (started) {
-            webSocketClient.setAssistantState(AtlasWebSocketClient.AssistantState.LISTENING)
-        }
+        isRecording = true
+        webSocketClient.setAssistantState(AtlasWebSocketClient.AssistantState.LISTENING)
+        liveStreamingText = "Listening..."
+
+        val lang = if (webSocketClient.currentLanguage.value == "te") "te-IN" else "en-IN"
+        speechRecognizer.startListening(lang)
     }
 
     private fun stopVoiceCapture() {
-        audioRecorder.stopRecording()
-        // Commit voice turn to backend so speech is transcribed and answered
-        webSocketClient.sendVoiceCommit()
+        speechRecognizer.stopListening()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         audioPlayer.release()
-        audioRecorder.stopRecording()
+        speechRecognizer.cancel()
         webSocketClient.disconnect()
     }
 }

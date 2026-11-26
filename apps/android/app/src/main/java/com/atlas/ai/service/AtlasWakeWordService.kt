@@ -16,7 +16,6 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.atlas.ai.MainActivity
-import com.atlas.ai.audio.AudioRecorder
 import com.atlas.ai.audio.WakeWordEngine
 import com.atlas.ai.audio.WakeWordListener
 import kotlinx.coroutines.CoroutineScope
@@ -74,7 +73,6 @@ open class AtlasWakeWordService : Service(), WakeWordListener {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var wakeLock: PowerManager.WakeLock? = null
-    private var audioRecorder: AudioRecorder? = null
     private var wakeWordEngine: WakeWordEngine? = null
 
     override fun onCreate() {
@@ -82,9 +80,8 @@ open class AtlasWakeWordService : Service(), WakeWordListener {
         Log.d(TAG, "AtlasWakeWordService created")
         createNotificationChannel()
 
-        // Initialize WakeWord engine with context for native speech detection + PCM VAD
+        // Initialize WakeWord engine with context for native speech detection
         wakeWordEngine = WakeWordEngine(serviceScope, this, this)
-        audioRecorder = AudioRecorder(this, serviceScope)
 
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
         wakeLock = powerManager?.newWakeLock(
@@ -107,9 +104,6 @@ open class AtlasWakeWordService : Service(), WakeWordListener {
                 _isServiceRunning.value = true
 
                 wakeWordEngine?.startListening()
-                audioRecorder?.startRecording { chunk ->
-                    wakeWordEngine?.processPcmChunk(chunk)
-                }
             }
             ACTION_STOP_LISTENING -> {
                 Log.d(TAG, "Stopping wake-word listening service...")
@@ -139,7 +133,6 @@ open class AtlasWakeWordService : Service(), WakeWordListener {
     private fun stopForegroundListening() {
         _isServiceRunning.value = false
         wakeWordEngine?.stopListening()
-        audioRecorder?.stopRecording()
 
         try {
             if (wakeLock?.isHeld == true) {
